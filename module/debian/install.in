@@ -1,0 +1,1 @@
+src/connstat.ko /lib/modules/@@KVERS@@/kernel/net/connstat

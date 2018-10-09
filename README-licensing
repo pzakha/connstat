@@ -1,0 +1,35 @@
+Licensing for connstat is done on a file-by-file basis in the
+repository, utilizing two different licenses. You can determine
+which license applies by checking the licensing header in each
+file. This file provides an overview of the license associated
+with each file. 
+
+You are responsible for complying with all license terms, and
+should refer to the license itself for the associated details.
+
+GPL Version 2 - see connstat/LICENSE-GPL-2.0.txt
+- connstat/module/src/constat.c 
+This file was derived from linux/net/ipv4/tcp_ipv4.c :
+https://github.com/torvalds/linux/blob/master/net/ipv4/tcp_ipv4.c. 
+It is therefore released under the GPL2 to satisfy the
+requirement that modifications be license with GPL 2 or higher. 
+
+Apache Version 2.0 - see connstat/LICENSE_APACHE-2.0.txt
+All other source code and files have been authored within Delphix
+and are made available under the apache 2.0 license.  These
+include the following files: 
+connstat/Makefile
+connstat/bootstrap/playbook.yml
+connstat/bootstrap/roles/connstat.bootstrap/tasks/main.yml
+connstat/module/Makefile
+connstat/module/configure.sh
+connstat/module/debian/control.in
+connstat/module/debian/install.in
+connstat/module/debian/rules
+connstat/module/src/Makefile.in
+connstat/usr/Makefile
+connstat/usr/cmd/connstat
+connstat/usr/debian/control
+connstat/usr/debian/rules
+connstat/usr/test/connstat_test.ksh
+

@@ -1,0 +1,221 @@
+#!/usr/bin/env python3
+#
+# Copyright 2018 Delphix
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Displays selected data from /proc/net/stats_tcp
+import argparse
+import time
+import os
+from enum import Enum
+
+class ParsePositiveIntegerAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        if values <= 0:
+            if (option_string == '--count' or option_string == '-c'):
+                dest_string = 'count'
+            else:
+                dest_string = 'interval'
+
+            raise ValueError(dest_string + ' must be > 0')
+        setattr(namespace, self.dest, values)
+
+class Field(Enum):
+
+    @property
+    def index(self):
+        return self.__index
+
+    @property
+    def print_name(self):
+        return self.__name
+
+    @property
+    def print_width(self):
+        return self.__print_width
+
+    @property
+    def filter(self):
+        return self.__filter
+
+    @filter.setter
+    def filter(self, filter):
+         self.__filter = filter
+
+    def __init__(self, index, name, print_width, filter):
+        self.__index = index
+        self.__name = name
+        self.__print_width = print_width
+        self.__filter = filter
+
+    laddr = 0, 'laddr', 15, None
+    lport = 1, 'lport', 6, None
+    raddr = 2, 'raddr', 15, None
+    rport = 3, 'rport', 6, None
+    state = 4, 'state', 12, None
+    inbytes = 5, 'inbytes', 11, None
+    insegs = 6, 'insegs', 11, None
+    outbytes = 7, 'outbytes', 11, None
+    outsegs = 8, 'outsegs', 11, None
+    retranssegs = 9, 'retranssegs', 12, None
+    suna = 10, 'suna', 11, None
+    unsent = 11, 'unsent', 11, None
+    swnd = 12, 'swnd', 11, None
+    cwnd = 13, 'cwnd', 11, None
+    rwnd = 14, 'rwnd', 11, None
+    mss = 15, 'mss', 6, None
+    rto = 16, 'rto', 8, None
+    rtt = 17, 'rtt', 8, None
+
+
+output_fields = [Field.laddr, Field.lport, Field.raddr,
+                 Field.rport, Field.state]
+
+def lazy_load_module():
+    lsmod=os.system("lsmod | grep connstat > /dev/null")
+    if lsmod != 0:
+        print("Loading connstat kernel module")
+        os.system("sudo depmod;sudo modprobe connstat");
+
+def filter_skip(line_str_list):
+    for f in Field:
+        if (f.filter is not None
+            and f.filter != line_str_list[f.index]):
+            return True
+
+    return False
+
+
+def loopback_skip(line_str_list):
+    if not args.no_loopback:
+        return False
+    ip1 = line_str_list[Field.laddr.index].split('.')
+    if (ip1[0] == '127'):
+            return True
+    return False
+
+#
+# Read the entries from /proc/net/stats_tcp and regurgitate
+# the data in tabular form; applying options to filter out
+# lines based on values, select which fields to display and
+# in what order and to use a human readable or parsable mode.
+#
+def connstat_regurgitate():
+    headings_line = True
+    for line in open('/proc/net/stats_tcp'):
+        line_str_list = line.strip().split(',')
+
+        # Skip filtered out lines; not the headings(first) line
+        if not headings_line and (loopback_skip(line_str_list)
+                                  or filter_skip(line_str_list)):
+            continue
+        headings_line = False
+
+        # Print selected fields using specified format
+        if args.parsable:
+            first_field = True
+            output = ''
+            for f in output_fields:
+                if not first_field:
+                    output += ','
+                output += line_str_list[f.index]
+                first_field = False
+            print (output)
+        else:
+            for f in output_fields:
+                format = '%' + str(f.print_width) + 's'
+                print (format % (line_str_list[f.index]), end="")
+            print()
+
+lazy_load_module()
+
+parser = argparse.ArgumentParser(prog='connstat')
+
+parser.add_argument('-c', '--count', action=ParsePositiveIntegerAction,
+                    type=int, help='Only print COUNT reports')
+parser.add_argument('-e', '--established', action='store_true', default=False,
+                    help='Only display established connections')
+parser.add_argument('-F', '--filter', action='store',
+                    help='Only display connections that match FILTER')
+parser.add_argument('-i', '--interval', action=ParsePositiveIntegerAction,
+                    type=int, dest='SECONDS',
+                    help='Report once every SECONDS seconds')
+parser.add_argument('-L', '--no-loopback', action='store_true', default=False,
+                    help='Omit loopback connections')
+parser.add_argument('-o', '--output', action='store', dest='FIELDS',
+                    help='Restrict output to the comma-separated list'
+                    ' of fields specified')
+parser.add_argument('-P', '--parsable', action='store_true', default=False,
+                    help='Parsable output mode')
+parser.add_argument('-T', '--timestamp', action='store', dest='TYPE',
+                    help='Display a timestamp for each iteration',
+                    choices=['u', 'd'])
+
+args = parser.parse_args()
+
+if args.parsable and args.FIELDS is None:
+    raise ValueError('parsable output requires \'-o\'')
+
+if args.parsable and args.FIELDS == 'all':
+    raise ValueError('\'-o all\' is invalid with parsable output')
+
+if args.count is not None:
+    if args.SECONDS is None:
+        raise ValueError('interval must be specified if count is specified')
+    count_index = args.count
+
+if args.FIELDS is not None:
+    output_fields = []
+    if args.FIELDS == 'all':
+        for f in Field:
+            output_fields.append(f)
+    else:
+        output_list = args.FIELDS.split(',')
+        for item in output_list:
+            output_fields.append(Field[item])
+
+if args.established:
+    Field.state.filter = 'ESTABLISHED'
+
+if args.filter is not None:
+    filter_list = args.filter.split(',')
+    for item in filter_list:
+        fvlist = item.split('=')
+        Field[fvlist[0]].filter = fvlist[1]
+
+if args.parsable:
+    if args.FIELDS is None:
+        raise ValueError('parsable output requires \'-o\'')
+    if args.FIELDS == 'all':
+        raise ValueError('\'-o all\' is invalid with parsable output')
+
+
+while True:
+    if args.TYPE is 'u':
+        print (time.time())
+    elif args.TYPE is 'd':
+        os.system("date")
+
+    connstat_regurgitate()
+
+    if args.SECONDS is None:
+        break
+
+    if args.count is not None:
+        count_index -= 1
+        if count_index == 0:
+            break
+
+    time.sleep(args.SECONDS)
