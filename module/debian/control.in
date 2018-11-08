@@ -15,7 +15,7 @@
 #
 
 Source: connstat
-Section: metapackages
+Section: kernel
 Priority: optional
 Maintainer: Delphix Engineering <eng@delphix.com>
 Build-Depends: debhelper (>= 10), devscripts
@@ -23,8 +23,7 @@ Standards-Version: 4.1.2
 
 Package: connstat-module-@@KVERS@@
 Architecture: any
-Replaces: base-files
-Depends: ${misc:Depends}
+Depends: linux-image-@@KVERS@@
 Description: Connstat
   This package provides advanced per-connection tcp stats.
 Provides: connstat-module
