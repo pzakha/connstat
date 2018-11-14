@@ -117,7 +117,12 @@ def connstat_regurgitate():
     for line in open('/proc/net/stats_tcp'):
         line_str_list = line.strip().split(',')
 
-        # Skip filtered out lines; not the headings(first) line
+        # Omit headings(first) line for parsable output
+        if args.parsable and headings_line:
+            headings_line = False
+            continue
+
+        # Skip filtered out lines; doesn't apply to headings
         if not headings_line and (loopback_skip(line_str_list)
                                   or filter_skip(line_str_list)):
             continue
@@ -204,8 +209,10 @@ if args.parsable:
 
 while True:
     if args.TYPE is 'u':
+        print ("=", end =" ")
         print (time.time())
     elif args.TYPE is 'd':
+        print ("=", end =" ")
         os.system("date")
 
     connstat_regurgitate()
