@@ -20,9 +20,9 @@ if [[ -z "$KVERS" ]]; then
 	export KVERS=$(uname -r)
 fi
 
-sed "s/@@KVERS@@/$KVERS/" \
+sed "s/@@KVERS@@/$KVERS/g" \
 	debian/control.in >debian/control
-sed "s/@@KVERS@@/$KVERS/" \
+sed "s/@@KVERS@@/$KVERS/g" \
 	debian/install.in >debian/install
-sed "s/@@KVERS@@/$KVERS/" \
+sed "s/@@KVERS@@/$KVERS/g" \
 	src/Makefile.in >src/Makefile
