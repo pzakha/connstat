@@ -86,7 +86,8 @@ output_fields = [Field.laddr, Field.lport, Field.raddr,
 def lazy_load_module():
     lsmod=os.system("lsmod | grep connstat > /dev/null")
     if lsmod != 0:
-        print("Loading connstat kernel module")
+        if not args.parsable:
+            print("Loading connstat kernel module")
         os.system("sudo depmod;sudo modprobe connstat");
 
 def filter_skip(line_str_list):
@@ -143,8 +144,6 @@ def connstat_regurgitate():
                 format = '%' + str(f.print_width) + 's'
                 print (format % (line_str_list[f.index]), end="")
             print()
-
-lazy_load_module()
 
 parser = argparse.ArgumentParser(prog='connstat')
 
@@ -215,6 +214,7 @@ while True:
         print ("=", end =" ")
         os.system("date")
 
+    lazy_load_module()
     connstat_regurgitate()
 
     if args.SECONDS is None:
