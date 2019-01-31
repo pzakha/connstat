@@ -15,7 +15,7 @@
 #
 
 Source: connstat-util
-Section: misc
+Section: net
 Priority: optional
 Maintainer: Delphix Engineering <eng@delphix.com>
 Build-Depends: debhelper (>= 10), devscripts
@@ -23,7 +23,6 @@ Standards-Version: 4.1.2
 
 Package: connstat-util
 Architecture: any
-Replaces: base-files
 Depends: connstat-module, python3
 Description: Connstat
   This package provides the userland connstat command which provides
