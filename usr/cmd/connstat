@@ -83,6 +83,8 @@ class Field(Enum):
 output_fields = [Field.laddr, Field.lport, Field.raddr,
                  Field.rport, Field.state]
 
+unique_fields = [Field.laddr, Field.lport, Field.raddr, Field.rport]
+
 def lazy_load_module():
     lsmod=os.system("lsmod | grep connstat > /dev/null")
     if lsmod != 0:
@@ -116,9 +118,11 @@ def loopback_skip(line_str_list):
 def connstat_regurgitate():
     headings_line = True
     table_str = ""
+    unique_strings = ""
     for line_in in open('/proc/net/stats_tcp'):
         line_str_list = line_in.strip().split(',')
         line_out = ""
+        dup_check_line = ""
 
         # Omit headings(first) line for parsable output
         if args.parsable and headings_line:
@@ -130,6 +134,13 @@ def connstat_regurgitate():
                                   or filter_skip(line_str_list)):
             continue
         headings_line = False
+
+	# Ignore duplicate lines
+        for f in unique_fields:
+            dup_check_line += line_str_list[f.index]
+        if dup_check_line in unique_strings:
+            continue
+        unique_strings += dup_check_line + '\n' 
 
         # Print selected fields using specified format
         if args.parsable:
@@ -143,10 +154,7 @@ def connstat_regurgitate():
             for f in output_fields:
                 sformat = "{: >" + str(f.print_width) + "}"
                 line_out += sformat.format(line_str_list[f.index], format)
-
-	# Ignore duplicate lines
-        if not line_out in table_str:
-            table_str += line_out + '\n'
+        table_str += line_out + '\n'
 
     return table_str
 
