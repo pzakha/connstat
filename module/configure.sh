@@ -24,12 +24,12 @@
 #
 if [[ -z "$KVERS" ]]; then
 	export KVERS=$(uname -r)
-	export KCENTEVERS=$(echo 100*`uname -r | cut -f1 -d.`+`uname -r | cut -f2 -d.` | bc)
 fi
+kcentevers=$(echo 100*`echo $KVERS | cut -f1 -d.`+`echo $KVERS | cut -f2 -d.` | bc)
 
 sed "s/@@KVERS@@/$KVERS/g" \
 	debian/control.in >debian/control
 sed "s/@@KVERS@@/$KVERS/g" \
 	debian/install.in >debian/install
-sed "s/@@KVERS@@/$KVERS/g; s/@@KCENTEVERS@@/$KCENTEVERS/g" \
+sed "s/@@KVERS@@/$KVERS/g; s/@@KCENTEVERS@@/$kcentevers/g" \
 	src/Makefile.in >src/Makefile
