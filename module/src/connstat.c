@@ -11,6 +11,7 @@
  */
 
 #include <net/tcp.h>
+#include <linux/proc_fs.h>
 
 typedef char ipv4_ip[15];
 
@@ -102,7 +103,12 @@ static void get_tcp4_sock(struct sock *sk, struct seq_file *f)
                 timer_expires = jiffies;
         }
 
-        state = sk_state_load(sk);
+#if (KERNEL_CENTEVERSION > 415)
+	state = inet_sk_state_load(sk);
+#else
+	state = sk_state_load(sk);
+#endif
+
         if (state == TCP_LISTEN)
                 rx_queue = sk->sk_ack_backlog;
         else
@@ -181,6 +187,34 @@ out:
  * /proc/net/stats_tcp file.  A callback will be made to connstat_seq_show
  * to generate content for the corresponding seq file when needed.
  */
+#if (KERNEL_CENTEVERSION > 415)
+
+static const struct seq_operations connstat_seq_ops = {
+        .show           = connstat_seq_show,
+        .start          = tcp_seq_start,
+        .next           = tcp_seq_next,
+        .stop           = tcp_seq_stop,
+};
+
+static struct tcp_seq_afinfo connstat_seq_afinfo = {
+        .family         = AF_INET,
+};
+
+static int __net_init connstat_proc_init_net(struct net *net)
+{
+        if (!proc_create_net_data("stats_tcp", 0444, net->proc_net, &connstat_seq_ops,
+                        sizeof(struct tcp_iter_state), &connstat_seq_afinfo))
+                return -ENOMEM;
+        return 0;
+}
+
+static void __net_exit connstat_proc_exit_net(struct net *net)
+{
+        remove_proc_entry("stats_tcp", net->proc_net);
+}
+
+#else
+
 static const struct file_operations connstat_seq_fops = {
         .owner   = THIS_MODULE,
         .open    = tcp_seq_open,
@@ -208,6 +242,7 @@ static void __net_exit connstat_proc_exit_net(struct net *net)
 	tcp_proc_unregister(net, &connstat_seq_afinfo);
 }
 
+#endif
 
 static struct pernet_operations connstat_net_ops = {
         .init = connstat_proc_init_net,

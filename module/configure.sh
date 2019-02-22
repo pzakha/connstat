@@ -16,13 +16,20 @@
 #
 #
 
+#
+# The KCENTEVERS is the release up to the minor version treated as a floating
+# point number multiplied by 100 (e.g for KVERS=4.18.0-1006-aws, KCENTEVERS=418).
+# This is used in module/src/connstat.c to preprocess the code for different kernel
+# versions.  The C pre-processor #if conditional statements need integers 
+#
 if [[ -z "$KVERS" ]]; then
 	export KVERS=$(uname -r)
+	export KCENTEVERS=$(echo 100*`uname -r | cut -f1 -d.`+`uname -r | cut -f2 -d.` | bc)
 fi
 
 sed "s/@@KVERS@@/$KVERS/g" \
 	debian/control.in >debian/control
 sed "s/@@KVERS@@/$KVERS/g" \
 	debian/install.in >debian/install
-sed "s/@@KVERS@@/$KVERS/g" \
+sed "s/@@KVERS@@/$KVERS/g; s/@@KCENTEVERS@@/$KCENTEVERS/g" \
 	src/Makefile.in >src/Makefile
