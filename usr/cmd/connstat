@@ -225,7 +225,7 @@ while True:
     if args.TYPE is 'u':
         output += "= " + str(time.time()) + "\n"
     elif args.TYPE is 'd':
-        output += "= " + str(os.system("data")) + "\n"
+        output += "= " + str(os.system("date")) + "\n"
 
     output += connstat_regurgitate()
     print (output, end="")
