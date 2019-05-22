@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright 2018 Delphix
+# Copyright 2018, 2019 Delphix
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,9 @@
 import argparse
 import time
 import os
+import sys
 from enum import Enum
+
 
 class ParsePositiveIntegerAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
@@ -31,6 +33,7 @@ class ParsePositiveIntegerAction(argparse.Action):
 
             raise ValueError(dest_string + ' must be > 0')
         setattr(namespace, self.dest, values)
+
 
 class Field(Enum):
 
@@ -52,7 +55,7 @@ class Field(Enum):
 
     @filter.setter
     def filter(self, filter):
-         self.__filter = filter
+        self.__filter = filter
 
     def __init__(self, index, name, print_width, filter):
         self.__index = index
@@ -85,17 +88,18 @@ output_fields = [Field.laddr, Field.lport, Field.raddr,
 
 unique_fields = [Field.laddr, Field.lport, Field.raddr, Field.rport]
 
+
 def lazy_load_module():
-    lsmod=os.system("lsmod | grep connstat > /dev/null")
+    lsmod = os.system("lsmod | grep connstat > /dev/null")
     if lsmod != 0:
         if not args.parsable:
             print("Loading connstat kernel module")
-        os.system("sudo depmod;sudo modprobe connstat");
+        os.system("sudo depmod;sudo modprobe connstat")
+
 
 def filter_skip(line_str_list):
     for f in Field:
-        if (f.filter is not None
-            and f.filter != line_str_list[f.index]):
+        if (f.filter is not None and f.filter != line_str_list[f.index]):
             return True
 
     return False
@@ -108,6 +112,7 @@ def loopback_skip(line_str_list):
     if (ip1[0] == '127'):
             return True
     return False
+
 
 #
 # Read the entries from /proc/net/stats_tcp and regurgitate
@@ -130,17 +135,17 @@ def connstat_regurgitate():
             continue
 
         # Skip filtered out lines; doesn't apply to headings
-        if not headings_line and (loopback_skip(line_str_list)
-                                  or filter_skip(line_str_list)):
+        if not headings_line and (loopback_skip(line_str_list) or
+                                  filter_skip(line_str_list)):
             continue
         headings_line = False
 
-	# Ignore duplicate lines
+        # Ignore duplicate lines
         for f in unique_fields:
             dup_check_line += line_str_list[f.index]
         if dup_check_line in unique_strings:
             continue
-        unique_strings += dup_check_line + '\n' 
+        unique_strings += dup_check_line + '\n'
 
         # Print selected fields using specified format
         if args.parsable:
@@ -229,6 +234,7 @@ while True:
 
     output += connstat_regurgitate()
     print (output, end="")
+    sys.stdout.flush()
 
     if args.SECONDS is None:
         break
