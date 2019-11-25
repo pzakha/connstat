@@ -31,7 +31,7 @@ class ParsePositiveIntegerAction(argparse.Action):
             else:
                 dest_string = 'interval'
 
-            raise ValueError(dest_string + ' must be > 0')
+            sys.exit(dest_string + ' must be > 0')
         setattr(namespace, self.dest, values)
 
 
@@ -42,12 +42,16 @@ class Field(Enum):
         return self.__index
 
     @property
-    def print_name(self):
-        return self.__name
-
-    @property
     def print_width(self):
         return self.__print_width
+
+    @property
+    def kernel_supports(self):
+        return self.__kernel_supports
+
+    @kernel_supports.setter
+    def kernel_supports(self, supports):
+        self.__kernel_supports = supports
 
     @property
     def filter(self):
@@ -57,30 +61,35 @@ class Field(Enum):
     def filter(self, filter):
         self.__filter = filter
 
-    def __init__(self, index, name, print_width, filter):
+    def __init__(self, index, print_width):
         self.__index = index
-        self.__name = name
         self.__print_width = print_width
-        self.__filter = filter
+        self.__kernel_supports = False
+        self.__filter = None
 
-    laddr = 0, 'laddr', 15, None
-    lport = 1, 'lport', 6, None
-    raddr = 2, 'raddr', 15, None
-    rport = 3, 'rport', 6, None
-    state = 4, 'state', 12, None
-    inbytes = 5, 'inbytes', 11, None
-    insegs = 6, 'insegs', 11, None
-    outbytes = 7, 'outbytes', 11, None
-    outsegs = 8, 'outsegs', 11, None
-    retranssegs = 9, 'retranssegs', 12, None
-    suna = 10, 'suna', 11, None
-    unsent = 11, 'unsent', 11, None
-    swnd = 12, 'swnd', 11, None
-    cwnd = 13, 'cwnd', 11, None
-    rwnd = 14, 'rwnd', 11, None
-    mss = 15, 'mss', 6, None
-    rto = 16, 'rto', 8, None
-    rtt = 17, 'rtt', 8, None
+    #
+    # The names of the following enums must match the strings in the header of
+    # the output of /proc/net/stats_tcp.
+    #
+    laddr = 0, 15
+    lport = 1, 6
+    raddr = 2, 15
+    rport = 3, 6
+    state = 4, 12
+    inbytes = 5, 11
+    insegs = 6, 11
+    outbytes = 7, 11
+    outsegs = 8, 11
+    retranssegs = 9, 12
+    suna = 10, 11
+    unsent = 11, 11
+    swnd = 12, 11
+    cwnd = 13, 11
+    rwnd = 14, 11
+    mss = 15, 6
+    rto = 16, 8
+    rtt = 17, 8
+    rxqueue = 18, 11
 
 
 output_fields = [Field.laddr, Field.lport, Field.raddr,
@@ -110,8 +119,19 @@ def loopback_skip(line_str_list):
         return False
     ip1 = line_str_list[Field.laddr.index].split('.')
     if (ip1[0] == '127'):
-            return True
+        return True
     return False
+
+
+def discover_supported_fields():
+    with open('/proc/net/stats_tcp') as f:
+        kernel_fields = f.readline().strip().split(',')
+    #
+    # Iterate over all of the fields in the header and keep track of those
+    # that were read in the Field enum.
+    #
+    for f in kernel_fields:
+        Field[f].kernel_supports = True
 
 
 #
@@ -163,6 +183,7 @@ def connstat_regurgitate():
 
     return table_str
 
+
 parser = argparse.ArgumentParser(prog='connstat')
 
 parser.add_argument('-c', '--count', action=ParsePositiveIntegerAction,
@@ -188,25 +209,37 @@ parser.add_argument('-T', '--timestamp', action='store', dest='TYPE',
 args = parser.parse_args()
 
 if args.parsable and args.FIELDS is None:
-    raise ValueError('parsable output requires \'-o\'')
+    sys.exit('parsable output requires \'-o\'')
 
 if args.parsable and args.FIELDS == 'all':
-    raise ValueError('\'-o all\' is invalid with parsable output')
+    sys.exit('\'-o all\' is invalid with parsable output')
 
 if args.count is not None:
     if args.SECONDS is None:
-        raise ValueError('interval must be specified if count is specified')
+        sys.exit('interval must be specified if count is specified')
     count_index = args.count
 
+lazy_load_module()
+discover_supported_fields()
+
 if args.FIELDS is not None:
+    field_names = set(item.name for item in Field)
     output_fields = []
     if args.FIELDS == 'all':
         for f in Field:
-            output_fields.append(f)
+            if f.kernel_supports:
+                output_fields.append(f)
     else:
         output_list = args.FIELDS.split(',')
         for item in output_list:
-            output_fields.append(Field[item])
+            if item not in field_names:
+                sys.exit('Unknown field: \'' + item + '\'')
+
+            field = Field[item]
+            if not field.kernel_supports:
+                sys.exit('This kernel does not support field \'' + item + '\'')
+            else:
+                output_fields.append(field)
 
 if args.established:
     Field.state.filter = 'ESTABLISHED'
@@ -219,21 +252,19 @@ if args.filter is not None:
 
 if args.parsable:
     if args.FIELDS is None:
-        raise ValueError('parsable output requires \'-o\'')
+        sys.exit('parsable output requires \'-o\'')
     if args.FIELDS == 'all':
-        raise ValueError('\'-o all\' is invalid with parsable output')
-
-lazy_load_module()
+        sys.exit('\'-o all\' is invalid with parsable output')
 
 while True:
     output = ""
-    if args.TYPE is 'u':
+    if args.TYPE == 'u':
         output += "= " + str(time.time()) + "\n"
-    elif args.TYPE is 'd':
+    elif args.TYPE == 'd':
         output += "= " + str(os.system("date")) + "\n"
 
     output += connstat_regurgitate()
-    print (output, end="")
+    print(output, end="")
     sys.stdout.flush()
 
     if args.SECONDS is None:
@@ -244,4 +275,7 @@ while True:
         if count_index == 0:
             break
 
-    time.sleep(args.SECONDS)
+    try:
+        time.sleep(args.SECONDS)
+    except KeyboardInterrupt:
+        exit(0)
