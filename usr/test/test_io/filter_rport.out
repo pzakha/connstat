@@ -1,0 +1,4 @@
+          laddr lport          raddr rport       state
+    10.43.50.37 35848   10.43.38.174  1521 ESTABLISHED
+    10.43.50.37 40422   10.43.61.250  1521 ESTABLISHED
+    10.43.50.37 40426   10.43.61.250  1521 ESTABLISHED

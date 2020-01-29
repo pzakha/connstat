@@ -140,13 +140,10 @@ static void get_timewait4_sock(const struct inet_timewait_sock *tw,
 	record_ipv4_conn(f, &data);
 }
 
-#define TMPSZ 150
-
 static int connstat_seq_show(struct seq_file *seq, void *v)
 {
 	struct sock *sk = v;
 
-	seq_setwidth(seq, TMPSZ - 1);
 	if (v == SEQ_START_TOKEN) {
 		seq_puts(seq, "laddr,"
 			      "lport,"
@@ -177,7 +174,6 @@ static int connstat_seq_show(struct seq_file *seq, void *v)
 	else
 		get_tcp4_sock(v, seq);
 out:
-	seq_pad(seq, '\n');
 	return 0;
 }
 

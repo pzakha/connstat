@@ -1,0 +1,21 @@
+name: Unit Test
+
+on: [pull_request, push]
+
+jobs:
+  connstat:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: Install python
+      uses: actions/setup-python@v1
+      with:
+        python-version: 3.7
+    - name: Setup python
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyyaml
+    - name: Run unit tests
+      run: ./connstat_unittest.py
+      working-directory: ./usr/test

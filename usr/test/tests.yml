@@ -1,0 +1,336 @@
+#
+# Copyright (c) 2019 by Delphix. All rights reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# This file describes connstat unit test cases. Each test must define the
+# following mapping keys:
+#
+# name: The name of the test case
+# assertion: A verbose description of what the test asserts
+# arguments: Command-line arguments to pass to connstat. The test case can
+#   test the assertion with multiple sets of command-line arguments by
+#   providing a list, in which case the test will be run for each element
+#   in the list.
+# exit: The expected connstat exit code. Note that if the expected exit code
+#   is non-zero, any non-zero exit status will be considered a passing test.
+#   The test considers any non-zero exit status as equivalent.
+#
+# Each test may be accompanied by the following files in the tests_io
+# subdirectory:
+#
+# <name>.in: Synthetic /proc/net/stats_tcp text that will be read by connstat.
+#   If this file doesn't exist, the test framework will default to using the
+#   file named default.in for input.
+# <name>.out: Expected connstat output (only needed for tests that ar
+#   expected to exit success (with status 0). The test will fail if the
+#   connstat output doesn't match the contents of this file.
+#
+
+-
+  name: default_output
+  assertion: >
+    With no command-line arguments, connstat outputs all existing connections
+    once with a default set of fields.
+  arguments:
+  exit: 0
+-
+  name: unknown_option
+  assertion: >
+    The connstat command exits with failure if provided an unknown
+    command-line option.
+  arguments:
+    - -b
+    - --unknown
+  exit: 1
+-
+  name: established
+  assertion: >
+    The -e option only prints established connections.
+  arguments:
+    - -e
+    - --established
+  exit: 0
+-
+  name: no_loopback
+  assertion: >
+    The -L option prints only non-loopback connections.
+  arguments:
+    - -L
+    - --no-loopback
+  exit: 0
+-
+  name: established_no_loopback
+  assertion: >
+    Using the -L and -e options together prints only non-loopback established
+    connections.
+  arguments:
+    - -Le
+    - --no-loopback --established
+  exit: 0
+-
+  name: filter_none
+  assertion: >
+    Using -F with no arguments is an error.
+  arguments:
+    - -F
+    - --filter
+  exit: 1
+-
+  name: filter_bad
+  assertion: >
+    Using -F with invalid suboptions is an error.
+  arguments:
+    - -F badfield=3
+    - -F badfield
+    - -F ,,,,
+    - --filter badfield=3
+  exit: 1
+-
+  name: filter_laddr
+  assertion: >
+    Filtering on the laddr field works.
+  arguments:
+    - -F laddr=10.43.50.37
+    - --filter laddr=10.43.50.37
+  exit: 0
+-
+  name: filter_lport
+  assertion: >
+    Filtering on the lport field works.
+  arguments:
+    - -F lport=2049
+    - --filter lport=2049
+  exit: 0
+-
+  name: filter_raddr
+  assertion: >
+    Filtering on the raddr field works.
+  arguments:
+    - -F raddr=172.16.132.3
+    - --filter raddr=172.16.132.3
+  exit: 0
+-
+  name: filter_rport
+  assertion: >
+    Filtering on the rport field works.
+  arguments:
+    - -F rport=1521
+    - --filter rport=1521
+  exit: 0
+-
+  name: filter_state
+  assertion: >
+    Filtering on the state field works.
+  arguments:
+    - -F state=CLOSE_WAIT
+    - --filter state=CLOSE_WAIT
+  exit: 0
+-
+  name: filter_multiple
+  assertion: >
+    Filtering can be done on more than one field.
+  arguments:
+    - -F raddr=172.16.132.3,state=TIME_WAIT
+    - --filter raddr=172.16.132.3,state=TIME_WAIT
+  exit: 0
+-
+  name: output_none
+  assertion: >
+    Using -o with no suboption is an error.
+  arguments:
+    - -o
+    - --output
+  exit: 1
+-
+  name: output_bad
+  assertion: >
+    Using -o with an unknown field is an error.
+  arguments:
+    - -o bad
+    - --output bad
+  exit: 1
+-
+  name: output_fields
+  assertion: >
+    Specifying fields to output via the -o option results in only those fields
+    being displayed.
+  arguments:
+    - -o laddr,lport,cwnd,inbytes,outbytes
+    - --output laddr,lport,cwnd,inbytes,outbytes
+  exit: 0
+-
+  name: parsable_nofields
+  assertion: >
+    Using parsable output mode without specifying fields to output results in
+    an error.
+  arguments:
+    - -P
+    - --parsable
+  exit: 1
+-
+  name: parsable
+  assertion: >
+    Parsable output mode works.
+  arguments:
+    - -P -o raddr,rport,outbytes
+    - --parsable --output raddr,rport,outbytes
+  exit: 0
+-
+  name: interval_none
+  assertion: >
+    Using -i without specifying an interval suboption is an error.
+  arguments:
+    - -i
+    - --interval
+  exit: 1
+-
+  name: interval_bad
+  assertion: >
+    Using -i with an invalid interval suboption is an error.
+  arguments:
+    - -i 0
+    - --interval 0
+  exit: 1
+-
+  name: interval_count_1
+  assertion: >
+    Using an interval with a count of 1 prints a single iteration of output.
+  arguments:
+    - -i 1 -c 1
+    - --interval 1 --count 1
+  exit: 0
+-
+  name: interval_count_2
+  assertion: >
+    Using an interval with a count of 2 prints two iterations of output.
+  arguments:
+    - -i 1 -c 2
+    - --interval 1 --count 2
+  exit: 0
+-
+  name: count_none
+  assertion: >
+    Using -c without specifying a count suboption is an error.
+  arguments:
+    - -c
+    - --count
+  exit: 1
+-
+  name: count_bad
+  assertion: >
+    Using -c with an invalid count suboption is an error.
+  arguments:
+    - -c 0
+    - --count 0
+  exit: 1
+-
+  name: count_nointerval
+  assertion: >
+    Using a count without specifying an interval is an error.
+  arguments:
+    - -c 2
+    - --count 2
+  exit: 1
+-
+  name: timestamp_none
+  assertion: >
+    Using -T without specifying a timestamp format results in an error.
+  arguments:
+    - -T
+    - --timestamp
+  exit: 1
+-
+  name: timestamp_bad
+  assertion: >
+    Using -T with an invalid timestamp format results in an error.
+  arguments:
+    - -T a
+    - --timestamp a
+  exit: 1
+-
+  name: timestamp_date
+  assertion: >
+    Using -T d prints a timestamp in a standard date format before other output.
+  arguments:
+    - -T d
+    - --timestamp d
+  exit: 0
+-
+  name: timestamp_date_parsable
+  assertion: >
+    Using -T d with parsable output prints a timestamp in a standard date
+    format prepended by an equal sign format before other output.
+  arguments:
+    - -P -o raddr,rport,state -T d
+    - --parsable --output raddr,rport,state --timestamp d
+  exit: 0
+-
+  name: timestamp_seconds
+  assertion: >
+    Using -T u prints a timestamp as seconds since epoch before other output.
+  arguments:
+    - -T u
+    - --timestamp u
+  exit: 0
+-
+  name: timestamp_seconds_parsable
+  assertion: >
+    Using -T u with parsable output prints a timestamp as seconds since epoch
+    prepended by an equal sign before other output.
+  arguments:
+    - -P -o raddr,rport,state -T u
+    - --parsable --output raddr,rport,state --timestamp u
+  exit: 0
+-
+  name: timestamp_multiple_intervals
+  assertion: >
+    When using intervals with a count greater than 1 and using timestamps, a
+    timestamp is printed before each interval.
+  arguments:
+    - -T d -i 1 -c 2
+    - --timestamp d --interval 1 --count 2
+  exit: 0
+-
+  name: unknown_proc_field_output_all
+  assertion: >
+    If the underlying stats file is outputing a field that connstat doesn't
+    know about and the user outputs all fields, the unknown field is not
+    included in the output. This tests a scenario where a field is EOL'ed from
+    connstat and the system has been upgraded, but the OS has yet to be
+    rebooted for the new kernel module to be loaded. The input file for this
+    test includes an extra field named unknown.
+  arguments:
+    - -o all
+    - --output all
+  exit: 0
+-
+  name: unknown_connstat_field
+  assertion: >
+    If connstat supports a field that the underlying stats file doesn't output
+    and the user includes that field name as a suboption to -o, this results
+    in an error. The input file for this test has the rxqueue field missing.
+  arguments:
+    - -o rxqueue
+    - --output rxqueue
+  exit: 1
+-
+  name: unknown_connstat_field_output_all
+  assertion: >
+    If connstat supports a field that the underlying stats file doesn't output
+    and the user outputs all fields, the unsupported field is not included in
+    the output. This tests a scenario where a new field is added to connstat
+    and the system has been upgraded, but the OS has yet to be rebooted for the
+    new kernel module to be loaded. The input file for this test has the
+    rxqueue field missing.
+  arguments:
+    - -o all
+    - --output all
+  exit: 0
+-
+  name: duplicate_connections
+  assertion: >
+    Connstat uniquifies connections in its output when the underlying stats
+    file includes multiple lines for the same connection.
+  arguments:
+  exit: 0

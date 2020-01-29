@@ -1,18 +1,8 @@
 #!/usr/bin/env python3
 #
-# Copyright 2018, 2019 Delphix
+# Copyright (c) 2018, 2019 by Delphix. All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-License-Identifier: Apache-2.0
 #
 
 # Displays selected data from /proc/net/stats_tcp
@@ -20,7 +10,7 @@ import argparse
 import time
 import os
 import sys
-from enum import Enum
+from datetime import datetime
 
 
 class ParsePositiveIntegerAction(argparse.Action):
@@ -35,24 +25,30 @@ class ParsePositiveIntegerAction(argparse.Action):
         setattr(namespace, self.dest, values)
 
 
-class Field(Enum):
+class Field:
 
+    @property
+    def name(self):
+        return self.__name
+
+    #
+    # The index of the field in /proc/net/stats_tcp output, or -1 if /proc
+    # doesn't support the field.
+    #
     @property
     def index(self):
         return self.__index
 
+    @index.setter
+    def index(self, index):
+        self.__index = index
+
+    # The column width that connstat should use to output the field
     @property
     def print_width(self):
         return self.__print_width
 
-    @property
-    def kernel_supports(self):
-        return self.__kernel_supports
-
-    @kernel_supports.setter
-    def kernel_supports(self, supports):
-        self.__kernel_supports = supports
-
+    # Value used to filter output based on this field
     @property
     def filter(self):
         return self.__filter
@@ -61,41 +57,11 @@ class Field(Enum):
     def filter(self, filter):
         self.__filter = filter
 
-    def __init__(self, index, print_width):
-        self.__index = index
+    def __init__(self, name, print_width):
+        self.__name = name
+        self.__index = -1
         self.__print_width = print_width
-        self.__kernel_supports = False
         self.__filter = None
-
-    #
-    # The names of the following enums must match the strings in the header of
-    # the output of /proc/net/stats_tcp.
-    #
-    laddr = 0, 15
-    lport = 1, 6
-    raddr = 2, 15
-    rport = 3, 6
-    state = 4, 12
-    inbytes = 5, 11
-    insegs = 6, 11
-    outbytes = 7, 11
-    outsegs = 8, 11
-    retranssegs = 9, 12
-    suna = 10, 11
-    unsent = 11, 11
-    swnd = 12, 11
-    cwnd = 13, 11
-    rwnd = 14, 11
-    mss = 15, 6
-    rto = 16, 8
-    rtt = 17, 8
-    rxqueue = 18, 11
-
-
-output_fields = [Field.laddr, Field.lport, Field.raddr,
-                 Field.rport, Field.state]
-
-unique_fields = [Field.laddr, Field.lport, Field.raddr, Field.rport]
 
 
 def lazy_load_module():
@@ -106,32 +72,82 @@ def lazy_load_module():
         os.system("sudo depmod;sudo modprobe connstat")
 
 
-def filter_skip(line_str_list):
-    for f in Field:
-        if (f.filter is not None and f.filter != line_str_list[f.index]):
-            return True
+def initialize_fields():
+    """Return a dictionary of supported Field objects keyed by field name."""
+    fields = {}
+    #
+    # Tuples of ( field_name, field_width ). The field names must match the
+    # strings in the header of the output of /proc/net/stats_tcp.
+    #
+    field_info_list = [
+        ('laddr', 15),
+        ('lport', 6),
+        ('raddr', 15),
+        ('rport', 6),
+        ('state', 12),
+        ('inbytes', 11),
+        ('insegs', 11),
+        ('outbytes', 11),
+        ('outsegs', 11),
+        ('retranssegs', 12),
+        ('suna', 11),
+        ('unsent', 11),
+        ('swnd', 11),
+        ('cwnd', 11),
+        ('rwnd', 11),
+        ('mss', 6),
+        ('rto', 8),
+        ('rtt', 8),
+        ('rxqueue', 11)
+        ]
 
+    for field_info in field_info_list:
+        field_name = field_info[0]
+        field_width = field_info[1]
+        fields[field_name] = Field(field_name, field_width)
+
+    return fields
+
+
+def filter_skip(line_str_list):
+    for i, value in enumerate(line_str_list):
+        field = proc_fields[i]
+        if (field.filter and field.filter != value):
+            return True
     return False
 
 
 def loopback_skip(line_str_list):
-    if not args.no_loopback:
-        return False
-    ip1 = line_str_list[Field.laddr.index].split('.')
-    if (ip1[0] == '127'):
-        return True
+    if args.no_loopback:
+        laddr_index = fields['laddr'].index
+        laddr = line_str_list[laddr_index].split('.')
+        if (laddr[0] == '127'):
+            return True
     return False
 
 
-def discover_supported_fields():
-    with open('/proc/net/stats_tcp') as f:
-        kernel_fields = f.readline().strip().split(',')
+def discover_proc_fields(stats_filename):
+    """Discover which fields are output by /proc/net/stats_tcp
+
+    This returns a list of Field objects sorted in the order output by
+    /proc/net/stats_tcp.
+    """
+    proc_fields = []
+    with open(stats_filename) as f:
+        proc_field_names = f.readline().strip().split(',')
     #
-    # Iterate over all of the fields in the header and keep track of those
-    # that were read in the Field enum.
+    # Iterate over all of the fields in the header and build an associated
+    # representative list of Field objects.
     #
-    for f in kernel_fields:
-        Field[f].kernel_supports = True
+    for i, field_name in enumerate(proc_field_names):
+        if field_name in fields:
+            field = fields[field_name]
+        else:
+            # The kernel is outputing a field that we don't know about.
+            field = Field(field_name, 0)
+        field.index = i
+        proc_fields.append(field)
+    return proc_fields
 
 
 #
@@ -140,14 +156,14 @@ def discover_supported_fields():
 # lines based on values, select which fields to display and
 # in what order and to use a human readable or parsable mode.
 #
-def connstat_regurgitate():
+def connstat_regurgitate(stats_filename):
     headings_line = True
     table_str = ""
-    unique_strings = ""
-    for line_in in open('/proc/net/stats_tcp'):
+    connections = []
+    for line_in in open(stats_filename):
         line_str_list = line_in.strip().split(',')
         line_out = ""
-        dup_check_line = ""
+        conn_id = ""
 
         # Omit headings(first) line for parsable output
         if args.parsable and headings_line:
@@ -160,25 +176,25 @@ def connstat_regurgitate():
             continue
         headings_line = False
 
-        # Ignore duplicate lines
+        #
+        # Ignore lines for connections we've already seen. This works around
+        # a bug in the TCP connection iterator in the kernel that erroneously
+        # visits the same connection more than once.
+        #
         for f in unique_fields:
-            dup_check_line += line_str_list[f.index]
-        if dup_check_line in unique_strings:
+            conn_id += line_str_list[f.index]
+        if conn_id in connections:
             continue
-        unique_strings += dup_check_line + '\n'
+        connections.append(conn_id)
 
         # Print selected fields using specified format
         if args.parsable:
-            first_field = True
-            for f in output_fields:
-                if not first_field:
-                    line_out += ','
-                line_out += line_str_list[f.index]
-                first_field = False
+            line_out = ','.join([line_str_list[f.index]
+                                for f in output_fields])
         else:
-            for f in output_fields:
-                sformat = "{: >" + str(f.print_width) + "}"
-                line_out += sformat.format(line_str_list[f.index], format)
+            line_out = ''.join(['%*s' % (f.print_width, line_str_list[f.index])
+                               for f in output_fields])
+
         table_str += line_out + '\n'
 
     return table_str
@@ -202,80 +218,123 @@ parser.add_argument('-o', '--output', action='store', dest='FIELDS',
                     ' of fields specified')
 parser.add_argument('-P', '--parsable', action='store_true', default=False,
                     help='Parsable output mode')
-parser.add_argument('-T', '--timestamp', action='store', dest='TYPE',
+parser.add_argument('-T', '--timestamp', action='store', dest='TS_TYPE',
                     help='Display a timestamp for each iteration',
                     choices=['u', 'd'])
 
 args = parser.parse_args()
 
-if args.parsable and args.FIELDS is None:
+if args.parsable and not args.FIELDS:
     sys.exit('parsable output requires \'-o\'')
 
 if args.parsable and args.FIELDS == 'all':
     sys.exit('\'-o all\' is invalid with parsable output')
 
-if args.count is not None:
-    if args.SECONDS is None:
+if args.count:
+    if not args.SECONDS:
         sys.exit('interval must be specified if count is specified')
     count_index = args.count
 
-lazy_load_module()
-discover_supported_fields()
+# The STATS_FILENAME variable is used for unit testing.
+if 'STATS_FILENAME' in os.environ:
+    stats_filename = os.environ['STATS_FILENAME']
+    test_mode = True
+else:
+    stats_filename = '/proc/net/stats_tcp'
+    test_mode = False
+    lazy_load_module()
 
-if args.FIELDS is not None:
-    field_names = set(item.name for item in Field)
+# fields is a dictionary of Field objects keyed by name
+fields = initialize_fields()
+
+#
+# unique_fields is a list of fields whose values uniquely identify a TCP
+# connection. This is used to determine whether two lines of output are
+# associated with the same connection.
+#
+unique_fields = [fields['laddr'], fields['lport'], fields['raddr'],
+                 fields['rport']]
+
+#
+# proc_fields is a list of field objects that represents the fields output by
+# /proc/net/stats_tcp. The order of the objects in this list is the same as the
+# order in which the associated fields are output in the file.
+#
+proc_fields = discover_proc_fields(stats_filename)
+
+#
+# output_fields is the list of fields that connstat will output. There is a set
+# of fields that is output by default, and this can be overridden by using the
+# -o option.
+#
+if not args.FIELDS:
+    output_fields = [fields['laddr'], fields['lport'], fields['raddr'],
+                     fields['rport'], fields['state']]
+else:
     output_fields = []
     if args.FIELDS == 'all':
-        for f in Field:
-            if f.kernel_supports:
-                output_fields.append(f)
+        for name, field in fields.items():
+            #
+            # If the kernel doesn't output that field, then don't include
+            # it in output_fields.
+            #
+            if field.index != -1:
+                output_fields.append(field)
     else:
+        field_names = fields.keys()
         output_list = args.FIELDS.split(',')
-        for item in output_list:
-            if item not in field_names:
-                sys.exit('Unknown field: \'' + item + '\'')
+        for ofname in output_list:
+            if ofname not in field_names:
+                sys.exit('Unknown field: \'' + ofname + '\'')
 
-            field = Field[item]
-            if not field.kernel_supports:
-                sys.exit('This kernel does not support field \'' + item + '\'')
+            field = fields[ofname]
+            if field.index == -1:
+                sys.exit('This kernel does not support field \'' +
+                         ofname + '\'')
             else:
                 output_fields.append(field)
 
 if args.established:
-    Field.state.filter = 'ESTABLISHED'
+    fields['state'].filter = 'ESTABLISHED'
 
-if args.filter is not None:
+if args.filter:
     filter_list = args.filter.split(',')
     for item in filter_list:
         fvlist = item.split('=')
-        Field[fvlist[0]].filter = fvlist[1]
+        fields[fvlist[0]].filter = fvlist[1]
 
 if args.parsable:
-    if args.FIELDS is None:
+    if not args.FIELDS:
         sys.exit('parsable output requires \'-o\'')
     if args.FIELDS == 'all':
         sys.exit('\'-o all\' is invalid with parsable output')
 
 while True:
     output = ""
-    if args.TYPE == 'u':
-        output += "= " + str(time.time()) + "\n"
-    elif args.TYPE == 'd':
-        output += "= " + str(os.system("date")) + "\n"
+    if args.TS_TYPE:
+        timenow = time.time()
+        if args.parsable:
+            output = "= "
+        if args.TS_TYPE == 'u':
+            output += str(int(timenow)) + "\n"
+        elif args.TS_TYPE == 'd':
+            dtnow = datetime.fromtimestamp(timenow).replace(microsecond=0)
+            output += dtnow.isoformat() + "\n"
 
-    output += connstat_regurgitate()
+    output += connstat_regurgitate(stats_filename)
     print(output, end="")
     sys.stdout.flush()
 
-    if args.SECONDS is None:
+    if not args.SECONDS:
         break
 
-    if args.count is not None:
+    if args.count:
         count_index -= 1
         if count_index == 0:
             break
 
-    try:
-        time.sleep(args.SECONDS)
-    except KeyboardInterrupt:
-        exit(0)
+    if not test_mode:
+        try:
+            time.sleep(args.SECONDS)
+        except KeyboardInterrupt:
+            exit(0)
