@@ -61,7 +61,7 @@ static void record_ipv4_conn(struct seq_file *f, struct connstat_data *data)
 
 	seq_printf(f,
 		   "%s,%u,%s,%u,%s,%llu,%u,%llu,%u,%u,"
-		   "%u,%u,%u,%u,%u,%u,%u,%u,%u",
+		   "%u,%u,%u,%u,%u,%u,%u,%u,%u\n",
 		   ipv4_ntop(data->laddr, laddr), data->lport,
 		   ipv4_ntop(data->raddr, raddr), data->rport,
 		   tcp_state_strings[data->state], data->inbytes, data->insegs,
@@ -163,7 +163,8 @@ static int connstat_seq_show(struct seq_file *seq, void *v)
 			      "mss,"
 			      "rto,"
 			      "rtt,"
-			      "rxqueue");
+			      "rxqueue"
+			      "\n");
 		goto out;
 	}
 
