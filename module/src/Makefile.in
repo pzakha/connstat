@@ -16,7 +16,7 @@
 #
 
 obj-m += connstat.o
-ccflags-y := -DKERNEL_CENTEVERSION=@@KCENTEVERS@@
+ccflags-y := -DKERNEL_CENTEVERSION=@@KCENTEVERS@@ -g
 MODOPTS= -C /lib/modules/@@KVERS@@/build M=$(PWD)
 
 all:
