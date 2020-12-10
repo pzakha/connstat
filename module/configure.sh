@@ -31,5 +31,8 @@ sed "s/@@KVERS@@/$KVERS/g" \
 	debian/control.in >debian/control
 sed "s/@@KVERS@@/$KVERS/g" \
 	debian/install.in >debian/install
+sed "s/@@KVERS@@/$KVERS/g" \
+	debian/postinst.in >debian/postinst
+chmod 755 debian/postinst
 sed "s/@@KVERS@@/$KVERS/g; s/@@KCENTEVERS@@/$kcentevers/g" \
 	src/Makefile.in >src/Makefile
